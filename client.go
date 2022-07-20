@@ -55,6 +55,7 @@ func NewClient(config ClientConfig, client_mod mod) (*Client, error) {
 		kgo.ConsumeTopics(config.Topic),
 		kgo.DefaultProduceTopic(config.Topic),
 		kgo.AllowAutoTopicCreation(),
+		kgo.DisableAutoCommit(),
 	}
 
 	if config.Username != "" && config.Password != "" {

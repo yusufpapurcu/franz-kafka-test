@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"fmt"
 
 	zapctx "github.com/saltpay/go-zap-ctx"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -17,25 +18,29 @@ func (c *Client) Listen(ctx context.Context, processor Processor) {
 	}
 
 	for {
-		fetches := c.client.PollFetches(ctx)
+		fetches := c.client.PollRecords(ctx, 5)
 		if errs := fetches.Errors(); len(errs) > 0 {
 			zapctx.Error(ctx, "error reading message, trying again")
 
 			continue
 		}
 
-		iter := fetches.RecordIter()
-		for !iter.Done() {
-			record := iter.Next()
+		fmt.Println("Pool size: ", len(fetches.Records()))
 
-			err := processor(ctx, record)
+		fetches.EachRecord(func(r *kgo.Record) {
+			err := processor(ctx, r)
 			if err != nil {
-				zapctx.Error(ctx, "error processing message, message not committed", zap.Error(err))
+				zapctx.Error(ctx, "error processing message", zap.Error(err))
 
-				continue
+				return
 			}
 
 			zapctx.Info(ctx, "message processed")
+		})
+
+		if err := c.client.CommitUncommittedOffsets(context.Background()); err != nil {
+			zapctx.Error(ctx, "commit records failed", zap.Error(err))
+			continue
 		}
 	}
 }
